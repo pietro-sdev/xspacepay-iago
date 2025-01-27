@@ -23,7 +23,6 @@ model Bot {
 model Flow {
   id        String   @id @default(cuid())
   botId     String   @unique
-  language  String 
   bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
   steps     Json
   createdAt DateTime @default(now())
@@ -35,9 +34,11 @@ model BotStep {
   botId           String
   type            String
   message         String?
-  filePath        String?
+  fileData        String?
+  fileMime        String?
   buttonText      String?
   buttonAction    String?
+  actionType      String?
   paymentProvider String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -45,13 +46,26 @@ model BotStep {
   @@index([botId])
 }
 
+
 model User {
-  id             String   @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String
-  email          String   @unique
+  email          String            @unique
   password       String
   profilePicture String?
-  language       String   @default("pt") // Campo adicionado para armazenar a preferência de idioma do usuário
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  paymentGateways PaymentGateway[]
+}
+
+model PaymentGateway {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String
+  apiKey      String
+  secretKey   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([userId, type])
 }

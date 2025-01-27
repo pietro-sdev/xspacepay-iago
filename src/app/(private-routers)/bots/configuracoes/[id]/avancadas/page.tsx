@@ -1,17 +1,22 @@
-// front-end.tsx
-
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { useState, useEffect, ChangeEvent } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import axios from 'axios';
 import { Button } from '@/components/ui/button';
+import { Trash, Plus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import Link from 'next/link';
 
-type StepType = 'text' | 'image' | 'video' | 'button' | 'payment' | 'post-payment' | 'initial-message';
+type StepType =
+  | 'initial-message'
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'button'
+  | 'payment'
+  | 'post-payment';
 
 type ActionType = 'url' | 'callback';
 
@@ -21,401 +26,479 @@ interface ButtonAction {
   actionType: ActionType;
 }
 
-interface BotStep {
+interface Step {
   id: string;
   type: StepType;
   message?: string;
-  imageFile?: File | null;
-  videoFile?: File | null;
-  buttons?: ButtonAction[]; // Suporte para múltiplos botões
+  file?: File | null;
+  filePreview?: string;
+  buttons: ButtonAction[];
   paymentProvider?: 'pix' | 'stripe' | 'paypal';
-  requiresAction?: boolean;
+  price?: number;
+  planName?: string;
 }
 
-interface Bot {
-  id: string;
-  name: string;
-  username: string;
-  status: string;
-}
-
-export default function AdvancedBotConfigPage() {
+export default function BotFlowPage() {
+  const router = useRouter();
   const params = useParams();
+  const id = params?.id; // Extrai o parâmetro 'id'
 
-  let botId: string | undefined;
-  if (params?.id) {
-    botId = Array.isArray(params.id) ? params.id[0] : params.id;
-  }
-
-  const [bot, setBot] = useState<Bot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [steps, setSteps] = useState<BotStep[]>([]);
-  const [selectedType, setSelectedType] = useState<StepType>('text');
-  const [flowLanguage, setFlowLanguage] = useState<'pt' | 'en' | 'es'>('pt');
-
-  const languages = [
-    { label: 'Português (Brasil)', code: 'pt' },
-    { label: 'English (USA)', code: 'en' },
-    { label: 'Español (Espanha)', code: 'es' },
-  ];
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!botId) return;
-    fetchBot(botId);
-    fetchFlow(botId);
-  }, [botId]);
+    if (id) {
+      fetchFlow(id as string);
+    } else {
+      setLoading(false); // Se não houver ID, pare o carregamento
+    }
+  }, [id]);
 
-  async function fetchBot(id: string) {
-    setLoading(true);
+  const fetchFlow = async (botId: string) => {
     try {
-      const response = await fetch(`/api/bots/GET_BY_ID/${id}`);
-      if (!response.ok) {
-        throw new Error('Erro ao carregar dados do bot');
-      }
-      const data = await response.json();
-      setBot(data.bot || null);
+      const response = await axios.get(`/api/bots/FLOW/${botId}/flow`); // Usar crases
+      // Garantir que cada passo tenha buttons inicializado como array
+      const fetchedSteps: Step[] = (response.data.steps || []).map((step: any) => ({
+        ...step,
+        buttons: step.buttons || []
+      }));
+      setSteps(fetchedSteps);
     } catch (error) {
-      console.error(error);
+      console.error('Erro ao buscar fluxo:', error);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function fetchFlow(botId: string) {
-    try {
-      const response = await fetch(`/api/bots/FLOWS/GET/getFlow?botId=${botId}`);
-      if (!response.ok) {
-        throw new Error('Erro ao carregar o fluxo do bot');
-      }
-      const data = await response.json();
-      if (data.success && data.flow.steps) {
-        setSteps(typeof data.flow.steps === 'string' ? JSON.parse(data.flow.steps) : data.flow.steps);
-        setFlowLanguage(data.flow.language || 'pt'); // Definir o idioma do fluxo se disponível
-      }
-    } catch (error) {
-      console.error('Erro ao carregar fluxo:', error);
-    }
-  }
-
-  function handleAddStep() {
-    const newStep: BotStep = {
+  const handleAddStep = () => {
+    const newStep: Step = {
       id: Date.now().toString(),
-      type: selectedType,
-      requiresAction: selectedType === 'button' || selectedType === 'payment',
-      buttons: selectedType === 'button' ? [] : undefined,
+      type: 'text',
+      message: '',
+      buttons: [], // Inicializa como array vazio
     };
-    setSteps((prev) => [...prev, newStep]);
-  }
+    setSteps([...steps, newStep]);
+  };
 
-  function handleChangeStep(id: string, updatedFields: Partial<BotStep>) {
-    setSteps((prev) =>
-      prev.map((step) => (step.id === id ? { ...step, ...updatedFields } : step))
-    );
-  }
+  const handleRemoveStep = (stepId: string) => {
+    setSteps(steps.filter((step) => step.id !== stepId));
+  };
 
-  function handleRemoveStep(id: string) {
-    setSteps((prev) => prev.filter((step) => step.id !== id));
-  }
-
-  function handleAddButton(stepId: string) {
-    setSteps((prev) =>
-      prev.map((step) =>
-        step.id === stepId
-          ? {
-              ...step,
-              buttons: [...(step.buttons || []), { text: '', action: '', actionType: 'callback' }],
-            }
-          : step
-      )
-    );
-  }
-
-  function handleRemoveButton(stepId: string, buttonIndex: number) {
-    setSteps((prev) =>
-      prev.map((step) =>
-        step.id === stepId
-          ? {
-              ...step,
-              buttons: step.buttons?.filter((_, index) => index !== buttonIndex),
-            }
-          : step
-      )
-    );
-  }
-
-  function handleButtonChange(
+  const handleStepChange = (
     stepId: string,
-    buttonIndex: number,
-    field: 'text' | 'action' | 'actionType',
-    value: string
-  ) {
-    setSteps((prev) =>
-      prev.map((step) =>
+    field: keyof Step,
+    value: any
+  ) => {
+    setSteps(
+      steps.map((step) =>
+        step.id === stepId ? { ...step, [field]: value } : step
+      )
+    );
+  };
+
+  const handleAddButton = (stepId: string) => {
+    setSteps(
+      steps.map((step) =>
         step.id === stepId
           ? {
               ...step,
-              buttons: step.buttons?.map((button, index) =>
-                index === buttonIndex ? { ...button, [field]: value } : button
+              buttons: [
+                ...step.buttons,
+                { text: '', action: '', actionType: 'callback' },
+              ],
+            }
+          : step
+      )
+    );
+  };
+
+  const handleRemoveButton = (stepId: string, index: number) => {
+    setSteps(
+      steps.map((step) =>
+        step.id === stepId
+          ? {
+              ...step,
+              buttons: step.buttons.filter((_, i) => i !== index),
+            }
+          : step
+      )
+    );
+  };
+
+  const handleButtonChange = (
+    stepId: string,
+    index: number,
+    field: keyof ButtonAction,
+    value: string
+  ) => {
+    setSteps(
+      steps.map((step) =>
+        step.id === stepId
+          ? {
+              ...step,
+              buttons: step.buttons.map((btn, i) =>
+                i === index ? { ...btn, [field]: value } : btn
               ),
             }
           : step
       )
     );
-  }
+  };
 
-  async function handleSaveFlow() {
-    if (!botId) {
-      alert('Bot ID inválido.');
+  const handleFileChange = (
+    stepId: string,
+    e: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0] || null;
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        handleStepChange(stepId, 'filePreview', reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      handleStepChange(stepId, 'filePreview', '');
+    }
+    handleStepChange(stepId, 'file', file);
+  };
+
+  const handleSaveFlow = async () => {
+    if (!id) {
+      alert('ID do bot não encontrado.');
       return;
     }
-  
+    setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('botId', botId);
-      formData.append('language', flowLanguage); // Adicionar idioma
-      formData.append('steps', JSON.stringify(steps));
-  
-      steps.forEach((step) => {
-        if (step.imageFile) {
-          formData.append(`imageFile_${step.id}`, step.imageFile);
-        }
-        if (step.videoFile) {
-          formData.append(`videoFile_${step.id}`, step.videoFile);
-        }
-      });
-  
-      const response = await fetch(`/api/bots/UPDATE_FLOW/saveFlow`, {
-        method: 'POST',
-        body: formData,
-      });
-  
-      if (!response.ok) {
-        throw new Error('Erro ao salvar o fluxo de mensagens');
-      }
-  
-      const data = await response.json();
-      alert('Fluxo salvo com sucesso!');
-    } catch (error) {
-      console.error('Erro ao salvar fluxo:', error);
-      alert('Erro ao salvar o fluxo. Por favor, tente novamente.');
-    }
-  }
-  
+      // Preparar os dados para envio
+      const payload = {
+        steps: steps.map((step) => ({
+          id: step.id,
+          type: step.type,
+          message: step.message || null,
+          fileData: step.file ? step.file.name : null, // Ajustar conforme necessidade
+          buttons: step.buttons || [],
+          paymentProvider: step.paymentProvider || null,
+          price: step.price || null,
+          planName: step.planName || null,
+        })),
+      };
 
-  if (!botId) {
-    return <p className="p-6">Bot não encontrado (sem ID).</p>;
-  }
+      // Enviar os dados como JSON
+      await axios.post(`/api/bots/FLOW/${id}/flow`, payload, { // Usar crases e caminho correto
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      alert('Fluxo salvo com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao salvar fluxo:', error);
+      // Tente exibir uma mensagem de erro mais informativa, se disponível
+      if (error.response && error.response.data && error.response.data.message) {
+        alert(`Erro: ${error.response.data.message}`);
+      } else {
+        alert('Erro ao salvar fluxo.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
-    return <p className="p-6">Carregando dados do bot...</p>;
+    return <p className="p-6">Carregando fluxo...</p>;
   }
 
-  if (!bot) {
-    return <p className="p-6">Bot não encontrado (objeto nulo).</p>;
+  if (!id) {
+    return <p className="p-6 text-red-500">ID do bot não fornecido nos parâmetros de busca.</p>;
   }
+
+  // Definir quais tipos de passos permitem botões
+  const stepsWithButtons: StepType[] = [
+    'initial-message',
+    'text',
+    'image',
+    'video',
+    'button',
+    'payment',
+    'post-payment'
+  ];
 
   return (
     <div className="p-6 space-y-6">
-      <div className='flex justify-between'>
-        <h1 className="text-2xl font-bold">
-          Configurar Fluxo Avançado do Bot: {bot.name} ({bot.username})
-        </h1>
-        <Link href={`/bots/configuracoes/${botId}/gateway`}>
-          <Button className='font-semibold'>Configurar Gateway de Pagamento</Button>
-        </Link>
-      </div>
+      <h1 className="text-2xl font-bold">Configurar Fluxo de Mensagens</h1>
+      {steps.map((step, index) => (
+        <div key={step.id} className="border p-4 rounded-md shadow">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">
+              Passo {index + 1}: {step.type.replace('-', ' ')}
+            </h2>
+            <Button
+              variant="destructive"
+              size="icon"
+              onClick={() => handleRemoveStep(step.id)}
+            >
+              <Trash size={16} />
+            </Button>
+          </div>
 
-      {/* Seletor de Idioma do Fluxo */}
-      <div className="flex items-center gap-2">
-        <Label>Idioma do Fluxo:</Label>
-        <select
-          value={flowLanguage}
-          onChange={(e) => setFlowLanguage(e.target.value as 'pt' | 'en' | 'es')}
-          className="border rounded px-2 py-1"
-        >
-          <option value="pt">Português (Brasil)</option>
-          <option value="en">English (USA)</option>
-          <option value="es">Español (Espanha)</option>
-        </select>
-      </div>
+          <div className="space-y-4">
+            {/* Tipo de Mensagem */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Tipo de Mensagem
+              </label>
+              <Select
+                value={step.type}
+                onValueChange={(value: StepType) => handleStepChange(step.id, 'type', value)}
+              >
+                <SelectTrigger className="w-full">
+                  <span>{step.type || 'Selecione o tipo de mensagem'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="initial-message">Mensagem Inicial</SelectItem>
+                  <SelectItem value="text">Mensagem de Texto</SelectItem>
+                  <SelectItem value="image">Mensagem com Imagem</SelectItem>
+                  <SelectItem value="video">Mensagem com Vídeo</SelectItem>
+                  <SelectItem value="button">Mensagem com Botões</SelectItem>
+                  <SelectItem value="payment">Enviar Cobrança</SelectItem>
+                  <SelectItem value="post-payment">Mensagem Pós-Pagamento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-      <div className="flex items-center gap-2">
-        <Label>Tipo de Ação:</Label>
-        <select
-          value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value as StepType)}
-          className="border rounded px-2 py-1"
-        >
-          <option value="text">Mensagem de Texto</option>
-          <option value="image">Mensagem com Imagem</option>
-          <option value="video">Mensagem com Vídeo</option>
-          <option value="button">Mensagem com Botão</option>
-          <option value="payment">Gerar Cobrança (Pix/Stripe/PayPal)</option>
-          <option value="post-payment">Mensagem pós-pagamento</option>
-          <option value="initial-message">Mensagem Inicial</option>
-        </select>
-        <Button onClick={handleAddStep}>Adicionar Passo</Button>
-      </div>
+            {/* Mensagem */}
+            {(step.type === 'initial-message' ||
+              step.type === 'text' ||
+              step.type === 'post-payment') && (
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Mensagem
+                </label>
+                <Textarea
+                  value={step.message || ''}
+                  onChange={(e) =>
+                    handleStepChange(step.id, 'message', e.target.value)
+                  }
+                  placeholder="Digite a mensagem..."
+                />
+              </div>
+            )}
 
-      <div className="space-y-4">
-        {steps.map((step) => (
-          <Card key={step.id}>
-            <CardHeader className="flex justify-between">
-              <CardTitle>{`Passo: ${step.type}`}</CardTitle>
-              <Button variant="destructive" onClick={() => handleRemoveStep(step.id)}>
-                Remover
-              </Button>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              {step.type === 'text' && (
+            {/* Mensagem com Imagem */}
+            {step.type === 'image' && (
+              <>
                 <div>
-                  <Label>Mensagem de Texto</Label>
-                  <Textarea
-                    value={step.message || ''}
-                    onChange={(e) =>
-                      handleChangeStep(step.id, { message: e.target.value })
-                    }
-                  />
-                </div>
-              )}
-
-              {step.type === 'button' && (
-                <div>
-                  <Label>Botões</Label>
-                  <div className="space-y-2">
-                    {step.buttons?.map((button, index) => (
-                      <div key={index} className="flex flex-col md:flex-row items-center gap-2">
-                        <Input
-                          value={button.text}
-                          onChange={(e) =>
-                            handleButtonChange(step.id, index, 'text', e.target.value)
-                          }
-                          placeholder="Texto do Botão"
-                        />
-                        <select
-                          value={button.actionType}
-                          onChange={(e) =>
-                            handleButtonChange(step.id, index, 'actionType', e.target.value as ActionType)
-                          }
-                          className="border rounded px-2 py-1"
-                        >
-                          <option value="callback">Ação Interna</option>
-                          <option value="url">URL Externa</option>
-                        </select>
-                        <Input
-                          value={button.action}
-                          onChange={(e) =>
-                            handleButtonChange(step.id, index, 'action', e.target.value)
-                          }
-                          placeholder={
-                            button.actionType === 'url'
-                              ? 'URL do Botão'
-                              : 'Comando ou ação'
-                          }
-                        />
-                        <Button
-                          variant="destructive"
-                          onClick={() => handleRemoveButton(step.id, index)}
-                        >
-                          Remover
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button className='mt-2' onClick={() => handleAddButton(step.id)}>Adicionar Botão</Button>
-                </div>
-              )}
-
-              {(step.type === 'image' || step.type === 'video') && (
-                <div>
-                  <Label>{step.type === 'image' ? 'Imagem' : 'Vídeo'}</Label>
+                  <label className="block text-sm font-medium mb-1">
+                    Upload de Imagem
+                  </label>
                   <Input
                     type="file"
-                    accept={step.type === 'image' ? 'image/*' : 'video/*'}
-                    onChange={(e) =>
-                      handleChangeStep(step.id, { [step.type === 'image' ? 'imageFile' : 'videoFile']: e.target.files?.[0] || null })
-                    }
+                    accept="image/*"
+                    onChange={(e) => handleFileChange(step.id, e)}
                   />
-                  {step.type === 'image' && step.imageFile && <p>Arquivo selecionado: {step.imageFile.name}</p>}
-                  {step.type === 'video' && step.videoFile && <p>Arquivo selecionado: {step.videoFile.name}</p>}
-                  
-                  {/* Adicionando Textarea para mensagem associada */}
-                  <Label>Mensagem {step.type === 'image' ? 'da Imagem' : 'do Vídeo'}</Label>
+                  {step.filePreview && (
+                    <img
+                      src={step.filePreview}
+                      alt="Preview"
+                      className="mt-2 w-32 h-32 object-cover"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Mensagem da Imagem
+                  </label>
                   <Textarea
                     value={step.message || ''}
                     onChange={(e) =>
-                      handleChangeStep(step.id, { message: e.target.value })
+                      handleStepChange(step.id, 'message', e.target.value)
                     }
-                    placeholder={`Digite a mensagem que acompanhará a ${step.type === 'image' ? 'imagem' : 'vídeo'}...`}
+                    placeholder="Digite a mensagem que acompanhará a imagem..."
                   />
                 </div>
-              )}
+              </>
+            )}
 
-              {step.type === 'payment' && (
-                <div className="space-y-2">
-                  <Label>Gateway</Label>
-                  <select
-                    value={step.paymentProvider || ''}
+            {/* Mensagem com Vídeo */}
+            {step.type === 'video' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Upload de Vídeo
+                  </label>
+                  <Input
+                    type="file"
+                    accept="video/*"
+                    onChange={(e) => handleFileChange(step.id, e)}
+                  />
+                  {step.filePreview && (
+                    <video
+                      src={step.filePreview}
+                      controls
+                      className="mt-2 w-64 h-64 object-cover"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Mensagem do Vídeo
+                  </label>
+                  <Textarea
+                    value={step.message || ''}
                     onChange={(e) =>
-                      handleChangeStep(step.id, {
-                        paymentProvider: e.target.value as 'pix' | 'stripe' | 'paypal',
-                      })
+                      handleStepChange(step.id, 'message', e.target.value)
                     }
-                    className="border rounded px-2 py-1 w-full"
+                    placeholder="Digite a mensagem que acompanhará o vídeo..."
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Mensagem com Botões */}
+            {stepsWithButtons.includes(step.type) && (
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Botões
+                </label>
+                {step.buttons.map((button, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center space-x-2 mb-2"
                   >
-                    <option value="">Escolha o gateway</option>
-                    <option value="pix">Pix (PushinPay)</option>
-                    <option value="stripe">Stripe</option>
-                    <option value="paypal">PayPal</option>
-                  </select>
-                  <Label>Mensagem de Cobrança</Label>
-                  <Textarea
-                    placeholder="Descreva o pagamento..."
-                    value={step.message || ''}
-                    onChange={(e) =>
-                      handleChangeStep(step.id, { message: e.target.value })
-                    }
-                  />
-                </div>
-              )}
+                    <Input
+                      placeholder="Texto do Botão"
+                      value={button.text}
+                      onChange={(e) =>
+                        handleButtonChange(
+                          step.id,
+                          idx,
+                          'text',
+                          e.target.value
+                        )
+                      }
+                      required
+                    />
+                    <Input
+                      placeholder={
+                        button.actionType === 'url'
+                          ? 'URL do Botão'
+                          : 'Comando ou ação'
+                      }
+                      value={button.action}
+                      onChange={(e) =>
+                        handleButtonChange(
+                          step.id,
+                          idx,
+                          'action',
+                          e.target.value
+                        )
+                      }
+                      required
+                    />
+                    <Select
+                      value={button.actionType}
+                      onValueChange={(value: ActionType) =>
+                        handleButtonChange(step.id, idx, 'actionType', value)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <span>{button.actionType || 'Selecione o tipo de ação'}</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="callback">Ação Interna</SelectItem>
+                        <SelectItem value="url">URL Externa</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-              {step.type === 'post-payment' && (
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleRemoveButton(step.id, idx)}
+                    >
+                      <Trash size={16} />
+                    </Button>
+                  </div>
+                ))}
+
+                {/* Limite de Botões */}
+                {step.buttons.length >= 4 && (
+                  <p className="text-sm text-red-500">
+                    Você atingiu o limite máximo de 4 botões.
+                  </p>
+                )}
+
+                <Button
+                  onClick={() => handleAddButton(step.id)}
+                  variant="outline"
+                  disabled={step.buttons.length >= 4}
+                  className="flex items-center"
+                >
+                  <Plus size={16} className="mr-2" /> Adicionar Botão
+                </Button>
+              </div>
+            )}
+
+            {/* Enviar Cobrança */}
+            {step.type === 'payment' && (
+              <>
                 <div>
-                  <Label>Mensagem Pós-Pagamento</Label>
-                  <Textarea
-                    placeholder="Digite a mensagem pós-pagamento que o bot enviará..."
-                    value={step.message || ''}
-                    onChange={(e) =>
-                      handleChangeStep(step.id, { message: e.target.value })
+                  <label className="block text-sm font-medium mb-1">
+                    Provedor de Pagamento
+                  </label>
+                  <Select
+                    value={step.paymentProvider || ''}
+                    onValueChange={(value: 'pix' | 'stripe' | 'paypal') =>
+                      handleStepChange(step.id, 'paymentProvider', value)
                     }
-                  />
+                  >
+                    <SelectTrigger className="w-full">
+                      <span>{step.paymentProvider || 'Selecione o provedor de pagamento'}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pix">Pix</SelectItem>
+                      <SelectItem value="stripe">Stripe</SelectItem>
+                      <SelectItem value="paypal">PayPal</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-
-              {step.type === 'initial-message' && (
                 <div>
-                  <Label>Mensagem Inicial</Label>
-                  <Textarea
-                    placeholder="Digite a mensagem inicial que o bot enviará..."
-                    value={step.message || ''}
+                  <label className="block text-sm font-medium mb-1">
+                    Nome do Plano
+                  </label>
+                  <Input
+                    value={step.planName || ''}
                     onChange={(e) =>
-                      handleChangeStep(step.id, { message: e.target.value })
+                      handleStepChange(step.id, 'planName', e.target.value)
                     }
+                    placeholder="Ex: Plano Mensal VIP"
                   />
                 </div>
-              )}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Valor (R$)
+                  </label>
+                  <Input
+                    type="number"
+                    value={step.price || ''}
+                    onChange={(e) =>
+                      handleStepChange(step.id, 'price', parseFloat(e.target.value))
+                    }
+                    placeholder="Digite o valor do plano..."
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
 
-              {step.requiresAction && (
-                <p className="text-sm text-muted-foreground">⚠️ Este passo exige uma ação do cliente para continuar.</p>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <div>
-        <Button onClick={handleSaveFlow}>Salvar Fluxo Completo</Button>
-      </div>
+      <Button onClick={handleAddStep} variant="outline" className="flex items-center">
+        <Plus size={16} className="mr-2" /> Adicionar Passo
+      </Button>
+
+      <Button onClick={handleSaveFlow} disabled={saving} className="mt-4">
+        {saving ? 'Salvando...' : 'Salvar Fluxo'}
+      </Button>
     </div>
   );
 }

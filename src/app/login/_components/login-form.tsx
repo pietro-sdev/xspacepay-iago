@@ -22,8 +22,9 @@ const schema = z.object({
 
 const LogInForm = () => {
   const router = useRouter();
-  const [isPending, startTransition] = React.useTransition();
+  const [isPending, setIsPending] = React.useState(false);
   const [passwordType, setPasswordType] = React.useState("password");
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const togglePasswordType = () => {
     setPasswordType((prev) => (prev === "text" ? "password" : "text"));
@@ -38,11 +39,46 @@ const LogInForm = () => {
     mode: "all",
   });
 
-  const onSubmit = (data: any) => {
-    startTransition(() => {
-      console.log("Login data:", data);
-      router.push("/dashboard"); 
-    });
+  const onSubmit = async (data: any) => {
+    setErrorMessage(null);
+    setIsPending(true);
+
+    try {
+      console.log("Iniciando login com os dados:", data);
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      console.log("Resposta da API:", response);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Erro da API:", errorData);
+        setErrorMessage(errorData.error || "Erro ao realizar login.");
+        setIsPending(false);
+        return;
+      }
+
+      const { token, userId } = await response.json();
+      console.log("Login bem-sucedido, token recebido:", token);
+
+      // Armazenar o token nos cookies
+      document.cookie = `token=${token}; path=/;`;
+
+      // Armazenar userId no localStorage
+      localStorage.setItem("userId", userId);
+
+      console.log("Redirecionando para /dashboard...");
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Erro inesperado durante o login:", error);
+      setErrorMessage("Erro inesperado. Tente novamente.");
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
@@ -73,8 +109,8 @@ const LogInForm = () => {
             })}
             placeholder="Digite seu e-mail "
           />
+          {errors.email && <p className="text-sm text-red-500"></p>}
         </div>
-
 
         <div className="mt-3.5">
           <Label
@@ -103,6 +139,7 @@ const LogInForm = () => {
               )}
             </div>
           </div>
+          {errors.password && <p className="text-sm text-red-500"></p>}
         </div>
 
         <div className="mt-5 mb-8 flex flex-wrap gap-2">
@@ -122,6 +159,9 @@ const LogInForm = () => {
             Esqueceu sua senha?
           </Link>
         </div>
+
+        {errorMessage && <p className="text-sm text-red-500 mb-4">{errorMessage}</p>}
+
         <Button type="submit" className="w-full" disabled={isPending}>
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isPending ? "Carregando..." : "Entrar"}
