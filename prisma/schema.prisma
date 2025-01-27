@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Bot {
+  id           String    @id @default(cuid())
+  name         String
+  username     String    @unique
+  token        String
+  profilePhoto String?
+  status       String    @default("active")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  steps        BotStep[]
+  flows        Flow[]
+}
+
+model Flow {
+  id        String   @id @default(cuid())
+  botId     String   @unique
+  language  String 
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  steps     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BotStep {
+  id              String   @id @default(cuid())
+  botId           String
+  type            String
+  message         String?
+  filePath        String?
+  buttonText      String?
+  buttonAction    String?
+  paymentProvider String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  bot             Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  @@index([botId])
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  password       String
+  profilePicture String?
+  language       String   @default("pt") // Campo adicionado para armazenar a preferência de idioma do usuário
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
