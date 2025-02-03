@@ -18,19 +18,17 @@ export class BotFlowService {
   }
 
   async saveFlow(botId: string, steps: any[]) {
-    // Validação simples para garantir que os passos tenham a estrutura necessária
     const validatedSteps = steps.map((step) => ({
       id: step.id,
       type: step.type,
       message: step.message || null,
-      fileData: step.fileData || null,
+      fileData: step.fileData || null, // Base64 da imagem ou vídeo
       buttons: step.buttons || [],
       paymentProvider: step.paymentProvider || null,
       price: step.price || null,
       planName: step.planName || null,
     }));
-
-    // Enviar os passos validados para o repositório
+  
     await this.botFlowRepository.upsertFlow(botId, validatedSteps);
-  }
+  }  
 }

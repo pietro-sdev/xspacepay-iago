@@ -199,9 +199,11 @@ export default function Page() {
                   </Button>
                 </TableCell>
                 <TableCell className="font-semibold">
-                  <Button size={'icon'} className="text-blue-700 bg-blue-300 hover:bg-blue-500">
-                    <PenIcon/>
-                  </Button>
+                  <Link href={`/bots/${bot.id}`}>
+                    <Button size={'icon'} className="text-blue-700 bg-blue-300 hover:bg-blue-500">
+                      <PenIcon/>
+                    </Button>
+                  </Link>
                 </TableCell>
               </TableRow>
             ))}

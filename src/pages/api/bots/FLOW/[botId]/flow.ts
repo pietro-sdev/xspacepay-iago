@@ -1,3 +1,11 @@
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '300mb',
+    },
+  },
+};
+
 import { NextApiRequest, NextApiResponse } from 'next';
 import { BotFlowService } from '../botFlowService';
 

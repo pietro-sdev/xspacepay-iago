@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { Fragment, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import LogInForm from "@/app/login/_components/login-form";
+import LogInForm from "@/app/(public)/login/_components/login-form";
 
 const LoginPage = () => {
   const [openVideo, setOpenVideo] = useState<boolean>(false);

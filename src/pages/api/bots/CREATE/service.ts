@@ -1,16 +1,12 @@
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions';
-import { Api } from 'telegram/tl'; // se precisar usar tipos
-import { createBotInDB } from './repository';
+// /pages/api/bots/CREATE/service.ts
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions";
+import { createBotInDB } from "./repository";
 
-
-const apiId = parseInt(process.env.TELEGRAM_API_ID || '0', 10);
-const apiHash = process.env.TELEGRAM_API_HASH || '';
-
-let sessionString = process.env.TELEGRAM_SESSION || '';
-
+const apiId = parseInt(process.env.TELEGRAM_API_ID || "0", 10);
+const apiHash = process.env.TELEGRAM_API_HASH || "";
+let sessionString = process.env.TELEGRAM_SESSION || "";
 let client: TelegramClient | null = null;
-
 
 async function getTelegramClient(): Promise<TelegramClient> {
   if (!client) {
@@ -20,77 +16,76 @@ async function getTelegramClient(): Promise<TelegramClient> {
       apiHash,
       { connectionRetries: 5 }
     );
-
-   
     await client.start({
-      
       phoneNumber: async () => {
-        throw new Error('Sem phoneNumber no modo produção. Configure a sessão pré-logada.');
+        throw new Error("Configure a TELEGRAM_SESSION pré-logada em produção.");
       },
-      password: async () => '',
-      phoneCode: async () => '',
+      password: async () => "",
+      phoneCode: async () => "",
       onError: (err) => console.error(err),
     });
-
-    sessionString = (client.session as StringSession).save();
-    console.log('GramJS client iniciado. Sessão atual:', sessionString);
+    sessionString = client.session.save();
+    console.log("[createBotService] GramJS client iniciado. Sessão:", sessionString);
   }
   return client;
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * Cria um novo bot conversando com o BotFather via MTProto.
- * @param botName
- * @param botUsername
+ * Cria UM novo bot conversando com o BotFather.
+ * O parâmetro 'index' (0 ou 1) é usado para aplicar um delay se necessário.
  */
-export async function createBotService(botName: string, botUsername: string) {
+export async function createBotService(botName: string, botUsername: string, index = 0) {
+  if (index === 1) {
+    console.log("[createBotService] Esperando 15s antes de criar o 2º bot...");
+    await delay(15000);
+  }
+
   try {
     const tg = await getTelegramClient();
 
-    await tg.sendMessage('BotFather', { message: '/newbot' });
-
+    // 1) Inicia o processo enviando o comando /newbot
+    await tg.sendMessage("BotFather", { message: "/newbot" });
     await delay(1500);
 
-    await tg.sendMessage('BotFather', { message: botName });
+    // 2) Envia o nome do bot
+    await tg.sendMessage("BotFather", { message: botName });
     await delay(1500);
 
-    await tg.sendMessage('BotFather', { message: botUsername });
+    // 3) Envia o username do bot
+    await tg.sendMessage("BotFather", { message: botUsername });
     await delay(2000);
 
-    const messages = await tg.getMessages('BotFather', { limit: 5 });
-    const lastMessage = messages[0]?.message || '';
+    // 4) Obtém as últimas mensagens do BotFather para extrair o token
+    const messages = await tg.getMessages("BotFather", { limit: 5 });
+    const lastMessage = messages[0]?.message || "";
+    console.log("[createBotService] Resposta do BotFather:\n", lastMessage);
 
-    /**
-     * O texto típico de sucesso é algo como:
-     * "Done! Congratulations on your new bot. You will find it at t.me/xxx.
-     *  Use this token to access the HTTP API: 1234567:ABC-DEFG..."
-     *
-     * Vamos buscar esse token com uma Regex simples:
-     */
     const tokenRegex = /Use this token to access the HTTP API:\s*`?([\w:-]+)`?/i;
     const match = lastMessage.match(tokenRegex);
 
     if (!match) {
-      throw new Error('Não foi possível extrair o token da resposta do BotFather:\n' + lastMessage);
+      throw new Error(
+        "Não foi possível extrair o token da resposta do BotFather:\n" + lastMessage
+      );
     }
 
     const token = match[1];
 
+    // Salva o novo bot no banco de dados
     const newBot = await createBotInDB({
       name: botName,
       username: botUsername,
       token,
-      profilePhoto: '',
+      profilePhoto: "",
     });
 
     return newBot;
   } catch (error) {
-    console.error('Erro ao criar o bot:', error);
-    throw new Error('Erro ao criar o bot com o BotFather.');
+    console.error("[createBotService] Erro ao criar bot:", error);
+    throw new Error("Erro ao criar o bot com o BotFather.");
   }
-}
-
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

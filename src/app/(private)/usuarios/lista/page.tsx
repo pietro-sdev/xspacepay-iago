@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+// IMPORTANTE: importe o Avatar, AvatarImage, AvatarFallback
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+
 interface User {
   id: string;
   name: string;
@@ -28,7 +31,7 @@ interface User {
   status?: string;
   createdAt: string;
   updatedAt: string;
-  profilePicture?: string | null;
+  profilePicture?: string | null;  // Campo que contém a URL ou Base64 da foto
 }
 
 export default function Page() {
@@ -37,7 +40,6 @@ export default function Page() {
 
   // Contadores para estatísticas
   const [totalUsers, setTotalUsers] = useState(0);
-
   const [newUsers, setNewUsers] = useState(0); 
 
   useEffect(() => {
@@ -60,6 +62,8 @@ export default function Page() {
 
         setTotalUsers(fetchedUsers.length);
 
+        // Aqui, só como exemplo, você pode definir quantos foram criados
+        // recentemente. Se quiser fazer uma lógica real, substitua esse valor.
         setNewUsers(5);
       }
     } catch (error) {
@@ -81,7 +85,7 @@ export default function Page() {
         throw new Error('Erro ao excluir usuário');
       }
 
-      fetchUsers();
+      fetchUsers(); // Recarrega a lista após excluir
     } catch (error) {
       console.error('Erro ao excluir usuário:', error);
       alert('Não foi possível excluir o usuário.');
@@ -93,7 +97,7 @@ export default function Page() {
       <h1 className="text-2xl font-bold">Painel Administrativo de Usuários</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-6">
-
+        {/* Card: Total de Usuários */}
         <Card>
           <CardHeader>
             <div className="flex justify-between">
@@ -107,6 +111,7 @@ export default function Page() {
           </CardContent>
         </Card>
 
+        {/* Card: Novos Cadastros */}
         <Card>
           <CardHeader>
             <div className="flex justify-between">
@@ -139,6 +144,7 @@ export default function Page() {
             <TableRow>
               <TableHead className="font-semibold">ID do Usuário</TableHead>
               <TableHead className="font-semibold">Data de Criação</TableHead>
+              <TableHead className="font-semibold">Foto de Perfil</TableHead>
               <TableHead className="font-semibold">Nome</TableHead>
               <TableHead className="font-semibold">E-mail</TableHead>
               <TableHead className="font-semibold">Excluir</TableHead>
@@ -148,12 +154,35 @@ export default function Page() {
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
+                {/* ID */}
                 <TableCell className="font-semibold">{user.id}</TableCell>
+
+                {/* Data de Criação */}
                 <TableCell className="font-semibold">
                   {new Date(user.createdAt).toLocaleDateString('pt-BR')}
                 </TableCell>
+
+                {/* Foto de Perfil (Avatar) */}
+                <TableCell className="font-semibold">
+                  <Avatar>
+                    {/* Se user.profilePicture estiver preenchido, exibe. Caso contrário, pode exibir alguma imagem placeholder. */}
+                    <AvatarImage
+                      src={user.profilePicture || '/images/placeholder.png'}
+                      alt={`Foto de ${user.name}`}
+                    />
+                    <AvatarFallback>
+                      {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                </TableCell>
+
+                {/* Nome */}
                 <TableCell className="font-semibold">{user.name}</TableCell>
+
+                {/* E-mail */}
                 <TableCell className="font-semibold">{user.email}</TableCell>
+
+                {/* Botão Excluir */}
                 <TableCell className="font-semibold">
                   <Button
                     size="icon"
@@ -163,10 +192,13 @@ export default function Page() {
                     <Trash2 />
                   </Button>
                 </TableCell>
+
+                {/* Botão Editar */}
                 <TableCell className="font-semibold">
                   <Button
                     size="icon"
                     className="text-blue-700 bg-blue-300 hover:bg-blue-500"
+                    // Você pode colocar um onClick ou Link para /usuarios/editar/[user.id], etc.
                   >
                     <PenIcon />
                   </Button>
@@ -174,6 +206,7 @@ export default function Page() {
               </TableRow>
             ))}
 
+            {/* Caso não haja usuários e não esteja carregando */}
             {users.length === 0 && !loading && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-4">

@@ -7,13 +7,13 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
-import { Eye, EyeOff } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast"; // Import do useToast
 
 const schema = z.object({
   email: z.string().email({ message: "E-mail inválido." }),
@@ -22,9 +22,10 @@ const schema = z.object({
 
 const LogInForm = () => {
   const router = useRouter();
+  const { toast } = useToast(); // Inicialização do useToast
   const [isPending, setIsPending] = React.useState(false);
   const [passwordType, setPasswordType] = React.useState("password");
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  // const [errorMessage, setErrorMessage] = React.useState<string | null>(null); // Opcional
 
   const togglePasswordType = () => {
     setPasswordType((prev) => (prev === "text" ? "password" : "text"));
@@ -40,7 +41,7 @@ const LogInForm = () => {
   });
 
   const onSubmit = async (data: any) => {
-    setErrorMessage(null);
+    // setErrorMessage(null); // Remova se não estiver usando
     setIsPending(true);
 
     try {
@@ -57,7 +58,14 @@ const LogInForm = () => {
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Erro da API:", errorData);
-        setErrorMessage(errorData.error || "Erro ao realizar login.");
+        
+        // Exibir toast de erro
+        toast({
+          title: "Erro no Login",
+          description: errorData.error || "Erro ao realizar login.",
+          variant: "destructive",
+        });
+
         setIsPending(false);
         return;
       }
@@ -72,10 +80,24 @@ const LogInForm = () => {
       localStorage.setItem("userId", userId);
 
       console.log("Redirecionando para /dashboard...");
+
+      // Exibir toast de sucesso
+      toast({
+        title: "Login bem-sucedido!",
+        description: "Você foi redirecionado para o painel.",
+        variant: "success",
+      });
+
       router.push("/dashboard");
     } catch (error) {
       console.error("Erro inesperado durante o login:", error);
-      setErrorMessage("Erro inesperado. Tente novamente.");
+      
+      // Exibir toast de erro genérico
+      toast({
+        title: "Erro",
+        description: "Erro inesperado. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setIsPending(false);
     }
@@ -109,7 +131,7 @@ const LogInForm = () => {
             })}
             placeholder="Digite seu e-mail "
           />
-          {errors.email && <p className="text-sm text-red-500"></p>}
+          {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
         </div>
 
         <div className="mt-3.5">
@@ -139,7 +161,7 @@ const LogInForm = () => {
               )}
             </div>
           </div>
-          {errors.password && <p className="text-sm text-red-500"></p>}
+          {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
         </div>
 
         <div className="mt-5 mb-8 flex flex-wrap gap-2">
@@ -160,7 +182,8 @@ const LogInForm = () => {
           </Link>
         </div>
 
-        {errorMessage && <p className="text-sm text-red-500 mb-4">{errorMessage}</p>}
+        {/* Remova esta parte se não estiver utilizando errorMessage */}
+        {/* {errorMessage && <p className="text-sm text-red-500 mb-4">{errorMessage}</p>} */}
 
         <Button type="submit" className="w-full" disabled={isPending}>
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

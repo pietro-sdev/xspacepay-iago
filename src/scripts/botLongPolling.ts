@@ -1,93 +1,313 @@
-// scripts/botLongPolling.ts
+// src/funil/botLongPolling.ts
+import fs from "fs";
+import TelegramBot from "node-telegram-bot-api";
+import { BOT_TOKEN } from "@/funil/config";
+import {
+  MESSAGES,
+  VIP_MESSAGES,
+  PAYMENT_METHOD_PROMPT,
+  PAYMENT_GENERATED,
+  UPSELL_MESSAGE,
+  CROSS_SELL_MESSAGE,
+} from "@/funil/messages";
+import { BUTTONS } from "@/funil/buttons";
+import { MEDIA } from "@/funil/media";
+import { gerarPix, verificarStatusPix } from "@/funil/pix";
+import { criarPagamentoPayPal } from "@/funil/paypal";
+import { criarPagamentoStripe } from "@/funil/stripe";
+import { iniciarMonitoramentoPagamento } from "@/funil/remarketing";
 
-import { Bot, session, SessionFlavor } from 'grammy';
-import { PrismaClient } from '@prisma/client';
-import dotenv from 'dotenv';
+// Links dos Grupos para upsell e cross-sell
+const GRUPO_VIP_LINK = "https://t.me/+7qavgRQcz2pjMmYx"; // Grupo VIP após pagamento
+const GRUPO_PLANO_ANUAL_LINK = "https://t.me/+7qavgRQcz2pjMmYx"; // Upsell: plano anual
+const GRUPO_CONTEUDO_PREMIUM_LINK = "https://t.me/+7qavgRQcz2pjMmYx"; // Cross sell: Conteúdo Premium
 
-// Carrega as variáveis de ambiente do arquivo .env
-dotenv.config();
+// Mapeia os pagamentos pendentes (compartilhado entre as instâncias)
+const pagamentosPendentes = new Map<
+  string,
+  { chatId: number; valor: number; idioma: string; tipo: string }
+>();
 
-// Tipagem para a sessão, caso queira armazenar dados específicos
-interface SessionData {
-  // Adicione campos de sessão se necessário
-}
-
-type MyContext = SessionFlavor<SessionData>;
-
-// Inicializa o Prisma Client
-const prisma = new PrismaClient();
-
-// Obtém as variáveis de ambiente
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const TELEGRAM_SESSION = process.env.TELEGRAM_SESSION;
-
-if (!BOT_TOKEN) {
-  console.error('Erro: BOT_TOKEN não está definido no arquivo .env');
-  process.exit(1);
-}
-
-// Inicializa o bot
-const bot = new Bot<MyContext>(BOT_TOKEN);
-
-// Middleware de sessão, se necessário
-// bot.use(session({ initial: () => ({ /* dados iniciais */ }) }));
-
-// Função para buscar a mensagem inicial do fluxo
-async function getInitialMessage(botId: string): Promise<string> {
-  try {
-    const flow = await prisma.flow.findUnique({
-      where: { botId },
+/**
+ * Registra todos os handlers de eventos (onText, on callback_query, etc.)
+ * para a instância do bot recebida.
+ */
+function registerEventHandlers(bot: TelegramBot) {
+  // Envia mensagem inicial com os botões de idioma
+  bot.onText(/\/start/, (msg) => {
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId, MESSAGES.start, {
+      reply_markup: { inline_keyboard: BUTTONS.language },
     });
+  });
 
-    if (!flow || !flow.steps) {
-      throw new Error('Fluxo não encontrado para o Bot ID informado.');
+  // Handler para todas as callback queries
+  bot.on("callback_query", async (query) => {
+    const chatId = query.message?.chat.id;
+    const queryData = query.data;
+    if (!chatId || !queryData) return;
+
+    // --- Tratamento dos Botões de Desconto ---
+    // Formato esperado:
+    // • "pay_with_discount_<paymentId>" (EUA),
+    // • "pagar_con_descuento_<paymentId>" (ESPAÑA) ou
+    // • "pagar_com_desconto_<paymentId>" (BR)
+    if (
+      queryData.startsWith("pay_with_discount_") ||
+      queryData.startsWith("pagar_con_descuento_") ||
+      queryData.startsWith("pagar_com_desconto_")
+    ) {
+      const parts = queryData.split("_");
+      const paymentId = parts[parts.length - 1];
+      const user = pagamentosPendentes.get(paymentId);
+      if (!user) {
+        await bot.sendMessage(
+          chatId,
+          "Desculpe, pagamento não encontrado ou já processado."
+        );
+        return;
+      }
+      const desconto = (user.valor * 0.9).toFixed(2);
+      if (user.tipo === "pix") {
+        const novoPagamento = await gerarPix(Number(desconto), "Pagamento VIP - 10% OFF");
+        if (novoPagamento) {
+          await bot.sendMessage(
+            chatId,
+            `🔒 *Novo PIX gerado com 10% de desconto!*\n\n💳 *Valor:* R$ ${desconto}\n\n\`${novoPagamento.qr_code}\`\n\n⚠️ *Use a opção "PIX Copia e Cola" no seu banco.*`,
+            { parse_mode: "Markdown" }
+          );
+        }
+      } else {
+        const currency = user.idioma === "es" ? "EUR" : "USD";
+        const paymentFunction = user.tipo === "pay_with_paypal" ? criarPagamentoPayPal : criarPagamentoStripe;
+        const link = await paymentFunction(Number(desconto), "VIP Subscription - 10% OFF", currency);
+        if (link) {
+          const msgDiscount =
+            user.idioma === "us"
+              ? `🛍 *Discount applied!*\n\n💳 *Amount:* $${desconto}\n\n🔗 [*Complete Payment*](${link})`
+              : `🛍 *¡Descuento aplicado!*\n\n💳 *Monto:* €${desconto}\n\n🔗 [*Completar pago*](${link})`;
+          await bot.sendMessage(chatId, msgDiscount, {
+            parse_mode: "Markdown",
+            disable_web_page_preview: true,
+          });
+        }
+      }
+      pagamentosPendentes.delete(paymentId);
+      return;
+    }
+    // --- Fim do Tratamento dos Botões de Desconto ---
+
+    let response = "";
+    let videoMessage = "";
+    let buttons: TelegramBot.InlineKeyboardButton[][] = [];
+    let gerarPagamento = false;
+
+    switch (queryData) {
+      case "lang_br":
+        response = MESSAGES.br;
+        videoMessage = MESSAGES.video_br;
+        buttons = BUTTONS.colors.br;
+        gerarPagamento = true;
+        break;
+      case "lang_us":
+        response = MESSAGES.us;
+        videoMessage = MESSAGES.video_us;
+        buttons = BUTTONS.colors.us;
+        pagamentosPendentes.set(chatId.toString(), { chatId, valor: 0, idioma: "us", tipo: "" });
+        break;
+      case "lang_es":
+        response = MESSAGES.es;
+        videoMessage = MESSAGES.video_es;
+        buttons = BUTTONS.colors.es;
+        pagamentosPendentes.set(chatId.toString(), { chatId, valor: 0, idioma: "es", tipo: "" });
+        break;
+      default:
+        break;
     }
 
-    // Supondo que 'steps' está armazenado como JSON
-    const steps = JSON.parse(flow.steps);
-
-    // Busca o passo do tipo 'initial-message'
-    const initialStep = steps.find((step: any) => step.type === 'initial-message');
-
-    if (!initialStep || !initialStep.message) {
-      throw new Error('Passo inicial de mensagem não encontrado no fluxo.');
+    if (response) {
+      await bot.sendMessage(chatId, response);
+      if (fs.existsSync(MEDIA.video)) {
+        await bot.sendVideo(chatId, fs.createReadStream(MEDIA.video), {
+          caption: videoMessage,
+          reply_markup: { inline_keyboard: buttons },
+        });
+      }
     }
 
-    return initialStep.message;
-  } catch (error) {
-    console.error('Erro ao buscar mensagem inicial:', error);
-    throw error;
-  }
+    // Fluxo para Brasil: gera PIX automaticamente
+    if (gerarPagamento) {
+      bot.once("callback_query", async (paymentQuery) => {
+        const valores = {
+          adquirir_10_00: 10.0,
+          adquirir_15_00: 15.0,
+          adquirir_20_00: 20.0,
+          adquirir_25_00: 25.0,
+          adquirir_30_00: 30.0,
+        };
+        const valor = valores[paymentQuery.data as keyof typeof valores];
+        if (valor) {
+          const pagamento = await gerarPix(valor, "Pagamento VIP no Telegram");
+          if (pagamento) {
+            pagamentosPendentes.set(pagamento.id, { chatId, valor, idioma: "br", tipo: "pix" });
+            iniciarMonitoramentoPagamento(bot, pagamento.id, chatId, "pix", pagamentosPendentes);
+            await bot.sendMessage(
+              chatId,
+              `🔒 *Pagamento gerado com sucesso!*\n\n💳 *Valor:* R$ ${valor.toFixed(2)}\n\n\`${pagamento.qr_code}\`\n\n⚠️ *Use a opção "PIX Copia e Cola" no seu banco.*`,
+              { parse_mode: "Markdown" }
+            );
+            await bot.sendMessage(
+              chatId,
+              "✅ Pagamento gerado com sucesso! Clique no botão abaixo para verificar:",
+              {
+                parse_mode: "Markdown",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: "🔍 Verificar o Pagamento ✅",
+                        callback_data: `verificar_pagamento_${pagamento.id}`,
+                      },
+                    ],
+                  ],
+                },
+              }
+            );
+          }
+        }
+      });
+    }
+
+    // Verifica o status do pagamento
+    if (queryData.startsWith("verificar_pagamento_")) {
+      const paymentId = queryData.replace("verificar_pagamento_", "");
+      const status = await verificarStatusPix(paymentId);
+      const user = pagamentosPendentes.get(paymentId);
+      if (status === "confirmed" || status === "paid") {
+        if (user) {
+          await bot.sendMessage(chatId, MESSAGES.paymentConfirmed, { parse_mode: "Markdown" });
+          await bot.sendMessage(chatId, VIP_MESSAGES[user.idioma as keyof typeof VIP_MESSAGES], {
+            reply_markup: { inline_keyboard: BUTTONS.vip[user.idioma as keyof typeof BUTTONS.vip] },
+          });
+          // --- Upsell e Cross Sell ---
+          if (user.idioma === "br") {
+            await bot.sendMessage(chatId, UPSELL_MESSAGE.br, { parse_mode: "Markdown" });
+            await bot.sendPhoto(chatId, MEDIA.image3);
+            await bot.sendMessage(chatId, `Clique aqui para acessar nosso grupo anual: ${GRUPO_PLANO_ANUAL_LINK}`, { parse_mode: "Markdown" });
+
+            await bot.sendMessage(chatId, CROSS_SELL_MESSAGE.br, { parse_mode: "Markdown" });
+            await bot.sendPhoto(chatId, MEDIA.image4);
+            await bot.sendMessage(chatId, `Clique aqui para acessar nosso grupo de Conteúdo Premium: ${GRUPO_CONTEUDO_PREMIUM_LINK}`, { parse_mode: "Markdown" });
+          } else if (user.idioma === "us") {
+            await bot.sendMessage(chatId, UPSELL_MESSAGE.us, { parse_mode: "Markdown" });
+            await bot.sendPhoto(chatId, MEDIA.image3);
+            await bot.sendMessage(chatId, `Click here to join our annual plan group: ${GRUPO_PLANO_ANUAL_LINK}`, { parse_mode: "Markdown" });
+
+            await bot.sendMessage(chatId, CROSS_SELL_MESSAGE.us, { parse_mode: "Markdown" });
+            await bot.sendPhoto(chatId, MEDIA.image4);
+            await bot.sendMessage(chatId, `Click here to join our Premium Content group: ${GRUPO_CONTEUDO_PREMIUM_LINK}`, { parse_mode: "Markdown" });
+          } else if (user.idioma === "es") {
+            await bot.sendMessage(chatId, UPSELL_MESSAGE.es, { parse_mode: "Markdown" });
+            await bot.sendPhoto(chatId, MEDIA.image3);
+            await bot.sendMessage(chatId, `Haz clic aquí para unirte a nuestro grupo anual: ${GRUPO_PLANO_ANUAL_LINK}`, { parse_mode: "Markdown" });
+
+            await bot.sendMessage(chatId, CROSS_SELL_MESSAGE.es, { parse_mode: "Markdown" });
+            await bot.sendPhoto(chatId, MEDIA.image4);
+            await bot.sendMessage(chatId, `Haz clic aquí para unirte a nuestro grupo de Contenido Premium: ${GRUPO_CONTEUDO_PREMIUM_LINK}`, { parse_mode: "Markdown" });
+          }
+          // --- Fim Upsell / Cross Sell ---
+          pagamentosPendentes.delete(paymentId);
+        }
+      } else {
+        await bot.sendMessage(chatId, MESSAGES.paymentNotIdentified, { parse_mode: "Markdown" });
+      }
+    }
+
+    const valores = {
+      adquirir_10_00: 10.0,
+      adquirir_15_00: 15.0,
+      adquirir_20_00: 20.0,
+      adquirir_25_00: 25.0,
+      adquirir_30_00: 30.0,
+    };
+
+    // Quando o usuário seleciona um valor
+    if (pagamentosPendentes.has(chatId.toString()) && queryData.startsWith("adquirir_")) {
+      const valor = valores[queryData as keyof typeof valores];
+      const user = pagamentosPendentes.get(chatId.toString());
+      if (user) pagamentosPendentes.set(chatId.toString(), { ...user, valor });
+      if (user) {
+        if (user.idioma === "us") {
+          await bot.sendMessage(chatId, PAYMENT_METHOD_PROMPT.us, {
+            reply_markup: { inline_keyboard: BUTTONS.paymentMethod.us },
+          });
+        } else if (user.idioma === "es") {
+          await bot.sendMessage(chatId, PAYMENT_METHOD_PROMPT.es, {
+            reply_markup: { inline_keyboard: BUTTONS.paymentMethod.es },
+          });
+        } else {
+          const pagamento = await gerarPix(valor, "Pagamento VIP no Telegram");
+          if (pagamento) {
+            pagamentosPendentes.set(pagamento.id, { chatId, valor, idioma: user.idioma, tipo: "pix" });
+            iniciarMonitoramentoPagamento(bot, pagamento.id, chatId, "pix", pagamentosPendentes);
+            await bot.sendMessage(
+              chatId,
+              `🔒 *Pagamento gerado com sucesso!*\n\n💳 *Valor:* R$ ${valor.toFixed(2)}\n\n\`${pagamento.qr_code}\`\n\n⚠️ *Use a opção "PIX Copia e Cola" no seu banco.*`,
+              { parse_mode: "Markdown" }
+            );
+          }
+        }
+      }
+    }
+
+    // Processa pagamentos externos (EUA e ESPAÑA)
+    if (queryData === "pay_with_paypal" || queryData === "pay_with_stripe") {
+      const user = pagamentosPendentes.get(chatId.toString());
+      if (!user) return;
+      const currency = user.idioma === "es" ? "EUR" : "USD";
+      const paymentFunction = queryData === "pay_with_paypal" ? criarPagamentoPayPal : criarPagamentoStripe;
+      const link = await paymentFunction(user.valor, "VIP Subscription", currency);
+      if (link) {
+        pagamentosPendentes.set(link, { chatId, valor: user.valor, idioma: user.idioma, tipo: queryData });
+        iniciarMonitoramentoPagamento(bot, link, chatId, queryData, pagamentosPendentes);
+        const msgPayment =
+          user.idioma === "us"
+            ? PAYMENT_GENERATED.us(user.valor.toFixed(2), link)
+            : PAYMENT_GENERATED.es(user.valor.toFixed(2), link);
+        await bot.sendMessage(chatId, msgPayment, { parse_mode: "Markdown", disable_web_page_preview: true });
+      }
+    }
+  });
 }
 
-// Handler para o comando /start
-bot.command('start', async (ctx) => {
-  const botId = 'cm66t8oup0000ruqsa3fcysnp'; // Substitua pelo botId correspondente
+/**
+ * Inicia o fluxo de long polling para uma única instância do bot usando o token informado.
+ * Registra os _handlers_ e retorna a instância.
+ */
+export function startBotLongPolling(token: string): TelegramBot {
+  const bot = new TelegramBot(token, { polling: true });
+  console.log("🤖 Bot iniciado com token:", token);
+  registerEventHandlers(bot);
+  return bot;
+}
 
-  try {
-    const initialMessage = await getInitialMessage(botId);
-    await ctx.reply(initialMessage);
-  } catch (error: any) {
-    await ctx.reply('Desculpe, ocorreu um erro ao iniciar o bot.');
-  }
-});
+/**
+ * Variável para armazenar as instâncias ativas.
+ */
+let bots: TelegramBot[] = [];
 
-// Handler para mensagens de texto
-bot.on('message:text', async (ctx) => {
-  const receivedText = ctx.message.text;
-  
-  // Aqui você pode implementar a lógica para processar a mensagem recebida
-  // de acordo com o fluxo definido no banco de dados.
-
-  await ctx.reply(`Você disse: ${receivedText}`);
-});
-
-// Inicia o bot com long polling
-bot.start({
-  onStart: (info) => {
-    console.log(`Bot ${info.username} iniciado`);
-  },
-  onError: (err) => {
-    console.error('Ocorreu um erro no bot:', err);
-  },
-});
+/**
+ * Para quaisquer instâncias existentes e inicia novas instâncias para cada token da lista.
+ * Retorna o array de bots ativos.
+ */
+export function startBotsLongPolling(tokens: string[]): TelegramBot[] {
+  // Para as instâncias anteriores (se houver)
+  bots.forEach((b) => b.stopPolling());
+  bots = [];
+  tokens.forEach((token) => {
+    const newBot = startBotLongPolling(token);
+    bots.push(newBot);
+  });
+  console.log("🤖 Bots iniciados com tokens:", tokens);
+  return bots;
+}

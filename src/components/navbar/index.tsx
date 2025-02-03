@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Menu, LogOut, User, Wallet, Users, Home, Bot, ArrowRightCircle } from "lucide-react";
+import { ChevronDown, Menu, LogOut, User, Wallet, Users, Home, Bot, ArrowRightCircle, CheckCheckIcon } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -169,6 +169,14 @@ export default function Navbar() {
               <Button variant="ghost" size="default" className="font-semibold hover:text-white transition">
                 <ArrowRightCircle className="w-4 h-4 font-semibold" />
                 Redirecionamento
+              </Button>
+            </Link>
+          </li>
+          <li>
+            <Link href="/auto-check">
+              <Button variant="ghost" size="default" className="font-semibold hover:text-white transition">
+                <CheckCheckIcon className="w-4 h-4 font-semibold" />
+                Auto Checagem
               </Button>
             </Link>
           </li>
