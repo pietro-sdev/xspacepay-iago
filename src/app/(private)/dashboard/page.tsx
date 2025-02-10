@@ -85,7 +85,7 @@ export default function Page() {
 
       <h1 className="text-2xl font-bold">Painel Administrativo</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
             <div className="flex justify-between">
@@ -113,21 +113,6 @@ export default function Page() {
               {loading ? '...' : activeBots}
             </p>
             <p className="text-sm text-muted-foreground">Operando atualmente</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between">
-              <CardTitle>Bots Inativos</CardTitle>
-              <PauseCircle className='h-4 w-4 text-muted-foreground' />
-            </div>
-          </CardHeader>
-          <CardContent className="-mt-3">
-            <p className="text-4xl font-bold">
-              {loading ? '...' : inactiveBots}
-            </p>
-            <p className="text-sm text-muted-foreground">Pausados ou desativados</p>
           </CardContent>
         </Card>
 

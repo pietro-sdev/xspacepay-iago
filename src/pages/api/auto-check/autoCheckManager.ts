@@ -5,6 +5,7 @@ interface AutoCheckConfig {
   channelId: string;
   intervalValue: number;
   intervalUnit: "minutes" | "hours" | "days";
+  funnel: string; // <-- Adicionado
 }
 
 let autoCheckTimer: NodeJS.Timeout | null = null;
@@ -12,12 +13,14 @@ let currentConfig: AutoCheckConfig = {
   channelId: "",
   intervalValue: 30,
   intervalUnit: "minutes",
+  funnel: "funil1", // valor padrão
 };
 
 export async function setAutoCheckConfig(config: AutoCheckConfig) {
   console.log("[autoCheckManager] Recebida config:", config);
   currentConfig = config;
   console.log("[autoCheckManager] Nova config de auto-check:", currentConfig);
+
   if (autoCheckTimer) {
     console.log("[autoCheckManager] Limpando timer antigo...");
     clearInterval(autoCheckTimer);
@@ -33,7 +36,7 @@ export async function setAutoCheckConfig(config: AutoCheckConfig) {
 
   autoCheckTimer = setInterval(() => {
     console.log("[AutoCheck] Iniciando verificação de links...");
-    checkChannelLinksAndReplace(currentConfig.channelId)
+    checkChannelLinksAndReplace(currentConfig.channelId, currentConfig.funnel)
       .then((result) => {
         console.log("[AutoCheck] checkChannelLinksAndReplace finalizado. Resultado:", result);
       })

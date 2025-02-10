@@ -3,11 +3,6 @@ let currentWordIndex = 0;
 let currentNumber = 1;
 
 const wordPairs = [
-  "LustLounge",
-  "RedWhisper",
-  "DarkPassion",
-  "FireRomance",
-  "SultryKiss",
   "HeatRush",
   "NaughtySecret",
   "WildSin",

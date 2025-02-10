@@ -8,16 +8,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: "Método não permitido." });
   }
 
-  const { channelId, intervalValue, intervalUnit } = req.body;
+  const { channelId, intervalValue, intervalUnit, funnel } = req.body;
   console.log("[config.ts] Recebido body:", req.body);
 
-  if (!channelId || !intervalValue || !intervalUnit) {
+  if (!channelId || !intervalValue || !intervalUnit || !funnel) {
     console.log("[config.ts] Dados incompletos.");
     return res.status(400).json({ error: "Dados incompletos." });
   }
 
   try {
-    await setAutoCheckConfig({ channelId, intervalValue, intervalUnit });
+    await setAutoCheckConfig({ channelId, intervalValue, intervalUnit, funnel });
     console.log("[config.ts] Configuração salva com sucesso.");
     return res.status(200).json({ message: "Configuração salva." });
   } catch (error: any) {

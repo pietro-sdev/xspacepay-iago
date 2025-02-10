@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label';
 
 export default function GatewayPage() {
   const [pixToken, setPixToken] = useState('');
-  const [stripePublishableKey, setStripePublishableKey] = useState('');
   const [stripeSecretKey, setStripeSecretKey] = useState('');
   const [paypalClientId, setPaypalClientId] = useState('');
   const [paypalSecret, setPaypalSecret] = useState('');
@@ -55,7 +54,6 @@ export default function GatewayPage() {
             setPixToken(gateway.apiKey);
             break;
           case 'stripe':
-            setStripePublishableKey(gateway.apiKey);
             setStripeSecretKey(gateway.secretKey || '');
             break;
           case 'paypal':
@@ -122,7 +120,6 @@ export default function GatewayPage() {
         },
         body: JSON.stringify({
           type: 'stripe',
-          apiKey: stripePublishableKey,
           secretKey: stripeSecretKey,
         }),
       });
@@ -258,14 +255,6 @@ export default function GatewayPage() {
               <CardDescription>Chaves para integração com a API do Stripe</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label>Publishable Key</Label>
-                <Input
-                  placeholder="pk_live_..."
-                  value={stripePublishableKey}
-                  onChange={(e) => setStripePublishableKey(e.target.value)}
-                />
-              </div>
               <div>
                 <Label>Secret Key</Label>
                 <Input

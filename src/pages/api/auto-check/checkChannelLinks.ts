@@ -7,7 +7,13 @@ import { createBotService } from "@/pages/api/bots/CREATE/service";
 import { getNextBotUsername } from "./botNameGenerator";
 import { usernameExists } from "./usernameExists";
 import { startAndRegisterPythonBot } from "./pythonBotsManager";
-import { updateLongPollingBots } from "@/scripts/botLongPolling";
+
+// Importamos cada "updateLongPollingBots" de cada funil
+import { updateLongPollingBots as updateLongPollingBotsDARK1 } from "@/funil/DARK1/botLongPolling";
+import { updateLongPollingBots as updateLongPollingBotsDARK2 } from "@/funil/DARK2/botLongPolling";
+import { updateLongPollingBots as updateLongPollingBotsDARK3 } from "@/funil/DARK3/botLongPolling";
+import { updateLongPollingBots as updateLongPollingBotsDARK4 } from "@/funil/DARK4/botLongPolling";
+import { updateLongPollingBots as updateLongPollingBotsDARK5 } from "@/funil/DARK5/botLongPolling";
 
 const apiId = parseInt(process.env.TELEGRAM_API_ID || "0", 10);
 const apiHash = process.env.TELEGRAM_API_HASH || "";
@@ -58,16 +64,18 @@ async function createUpTo2Bots() {
 /**
  * Faz a verificação do canal, substitui links offline e,
  * se houver links offline, cria os bots e inicia o fluxo com ambos os tokens.
+ * Agora também recebe o funil para decidir qual "updateLongPollingBots" chamar.
  */
-export async function checkChannelLinksAndReplace(channelId: string) {
+export async function checkChannelLinksAndReplace(channelId: string, funnel: string) {
   console.log(`[checkChannelLinksAndReplace] Checando canal: ${channelId}`);
+  console.log(`[checkChannelLinksAndReplace] Funil selecionado: ${funnel}`);
   const tg = await getTelegramClient();
 
   let createdBots: any[] = [];
   let botsCriados = false;
   let botIndex = 0;
 
-  // Garante o prefixo "-100" se channelId for numérico
+  // Ajuste o ID do canal se necessário
   if (!channelId.startsWith("-100") && /^\d+$/.test(channelId)) {
     channelId = `-100${channelId}`;
   }
@@ -118,10 +126,12 @@ export async function checkChannelLinksAndReplace(channelId: string) {
                   console.log("[checkChannelLinksAndReplace] Link offline detectado; criando bots...");
                   createdBots = await createUpTo2Bots();
                   if (createdBots.length > 0) {
+                    // Inicializa cada novo bot
                     createdBots.forEach((bot) => startAndRegisterPythonBot(bot.token));
                   }
                   botsCriados = true;
                 }
+
                 if (createdBots.length > 0) {
                   const chosenBot = createdBots[botIndex % createdBots.length];
                   botIndex++;
@@ -188,7 +198,34 @@ export async function checkChannelLinksAndReplace(channelId: string) {
   // Se os bots foram criados, inicia o fluxo de long polling para ambos
   if (botsCriados && createdBots.length > 0) {
     const tokens = createdBots.map((bot) => bot.token);
-    updateLongPollingBots(tokens);
+
+    // Escolhe dinamicamente qual updateLongPollingBots chamar
+    switch (funnel) {
+      case "funil1":
+        console.log("[checkChannelLinksAndReplace] Chamando updateLongPollingBotsDARK1...");
+        updateLongPollingBotsDARK1(tokens);
+        break;
+      case "funil2":
+        console.log("[checkChannelLinksAndReplace] Chamando updateLongPollingBotsDARK2...");
+        updateLongPollingBotsDARK2(tokens);
+        break;
+      case "funil3":
+        console.log("[checkChannelLinksAndReplace] Chamando updateLongPollingBotsDARK3...");
+        updateLongPollingBotsDARK3(tokens);
+        break;
+      case "funil4":
+        console.log("[checkChannelLinksAndReplace] Chamando updateLongPollingBotsDARK4...");
+        updateLongPollingBotsDARK4(tokens);
+        break;
+      case "funil5":
+        console.log("[checkChannelLinksAndReplace] Chamando updateLongPollingBotsDARK5...");
+        updateLongPollingBotsDARK5(tokens);
+        break;
+      default:
+        console.log("[checkChannelLinksAndReplace] Funil não reconhecido, usando 'DARK1' como fallback.");
+        updateLongPollingBotsDARK1(tokens);
+        break;
+    }
   }
 
   return { editedCount: totalEdited };
