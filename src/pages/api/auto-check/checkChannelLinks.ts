@@ -6,7 +6,6 @@ import bigInt from "big-integer";
 import { createBotService } from "@/pages/api/bots/CREATE/service";
 import { getNextBotUsername } from "./botNameGenerator";
 import { usernameExists } from "./usernameExists";
-import { startAndRegisterPythonBot } from "./pythonBotsManager";
 
 // Importamos cada "updateLongPollingBots" de cada funil
 import { updateLongPollingBots as updateLongPollingBotsDARK1 } from "@/funil/DARK1/botLongPolling";
@@ -127,7 +126,6 @@ export async function checkChannelLinksAndReplace(channelId: string, funnel: str
                   createdBots = await createUpTo2Bots();
                   if (createdBots.length > 0) {
                     // Inicializa cada novo bot
-                    createdBots.forEach((bot) => startAndRegisterPythonBot(bot.token));
                   }
                   botsCriados = true;
                 }
@@ -142,13 +140,13 @@ export async function checkChannelLinksAndReplace(channelId: string, funnel: str
                       offset: entity.offset,
                       length: entity.length,
                       url: newLink,
-                    });
+                    } as any); // Casting para "any" para incluir a propriedade "url"
                   } else {
                     newEntity = new Api.MessageEntityUrl({
                       offset: entity.offset,
                       length: entity.length,
                       url: newLink,
-                    });
+                    } as any);
                   }
                   updatedEntities.push(newEntity);
                   somethingChanged = true;

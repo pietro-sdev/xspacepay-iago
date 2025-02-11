@@ -36,8 +36,8 @@ async function getTelegramClient() {
 }
 
 interface LinkPair {
-  oldLink: string;
-  newLink: string;
+  oldLink: string
+  newLink: string
 }
 
 /**
@@ -56,7 +56,7 @@ export async function editChannelMessages(channel: string, linkPairs: LinkPair[]
   const limit = 100
   let editedCount = 0
 
-  // Crie um mapa para fácil busca: {oldLink: newLink}
+  // Cria um mapa para fácil busca: { oldLink: newLink }
   const linkMap: { [key: string]: string } = {}
   linkPairs.forEach(pair => {
     linkMap[pair.oldLink] = pair.newLink
@@ -64,7 +64,8 @@ export async function editChannelMessages(channel: string, linkPairs: LinkPair[]
 
   while (true) {
     try {
-      const history = await tg.invoke(
+      // Faz cast para "any" para podermos acessar a propriedade "messages"
+      const history: any = await tg.invoke(
         new Api.messages.GetHistory({
           peer: channelId, // Usa channelId com prefixo, se necessário
           offsetId,
@@ -77,40 +78,43 @@ export async function editChannelMessages(channel: string, linkPairs: LinkPair[]
         })
       )
 
-      // 'history' retorna um objeto com 'messages'
+      // 'history' retorna um objeto com a propriedade 'messages'
       const messages: any[] = history.messages || []
       if (!messages.length) {
         break
       }
 
       for (const msg of messages) {
-        // Verifica se a mensagem possui entidades com URLs
+        // Verifica se a mensagem possui entidades (ex.: URLs)
         if (msg.entities && msg.entities.length > 0) {
           let hasLink = false
-          // Itera sobre as entidades para encontrar URLs
-          const updatedEntities: Api.MessageEntity[] = []
+          // Usamos Api.TypeMessageEntity para declarar as entidades
+          const updatedEntities: Api.TypeMessageEntity[] = []
 
           msg.entities.forEach((entity: any) => {
-            if (entity instanceof Api.MessageEntityTextUrl || entity instanceof Api.MessageEntityUrl) {
-              const originalUrl = entity.url
+            if (
+              entity instanceof Api.MessageEntityTextUrl ||
+              entity instanceof Api.MessageEntityUrl
+            ) {
+              // Acessa a propriedade 'url' com um cast para evitar erro de tipagem
+              const originalUrl = (entity as { url: string }).url
               const newLink = linkMap[originalUrl]
               if (newLink) {
                 hasLink = true
-                // Substitui o URL pela newLink
+                // Cria uma nova entidade com o URL atualizado (cast para "any" no objeto literal)
                 const updatedEntity = entity instanceof Api.MessageEntityTextUrl
                   ? new Api.MessageEntityTextUrl({
                       offset: entity.offset,
                       length: entity.length,
                       url: newLink,
-                    })
+                    } as any)
                   : new Api.MessageEntityUrl({
                       offset: entity.offset,
                       length: entity.length,
                       url: newLink,
-                    })
+                    } as any)
 
-                // Type Assertion para evitar erros de TypeScript
-                updatedEntities.push(updatedEntity as Api.MessageEntity)
+                updatedEntities.push(updatedEntity as Api.TypeMessageEntity)
               } else {
                 // Se o URL não está no mapa, mantém a entidade original
                 updatedEntities.push(entity)

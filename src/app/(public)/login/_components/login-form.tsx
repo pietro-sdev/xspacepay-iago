@@ -131,7 +131,6 @@ const LogInForm = () => {
             })}
             placeholder="Digite seu e-mail "
           />
-          {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
         </div>
 
         <div className="mt-3.5">
@@ -161,7 +160,6 @@ const LogInForm = () => {
               )}
             </div>
           </div>
-          {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
         </div>
 
         <div className="mt-5 mb-8 flex flex-wrap gap-2">

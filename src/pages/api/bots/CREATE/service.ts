@@ -24,7 +24,8 @@ async function getTelegramClient(): Promise<TelegramClient> {
       phoneCode: async () => "",
       onError: (err) => console.error(err),
     });
-    sessionString = client.session.save();
+    // Realiza o cast para 'any' para evitar o erro de tipo
+    sessionString = (client.session as any).save();
     console.log("[createBotService] GramJS client iniciado. Sessão:", sessionString);
   }
   return client;
