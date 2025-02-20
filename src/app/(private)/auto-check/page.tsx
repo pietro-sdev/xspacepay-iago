@@ -112,11 +112,7 @@ export default function AutoCheckPage() {
               <SelectValue placeholder="Selecione o Funil" />
             </SelectTrigger>
             <SelectContent className="cursor-pointer">
-              <SelectItem value="funil1">Dark MPX - 1</SelectItem>
-              <SelectItem value="funil2">Dark MPX - 2</SelectItem>
-              <SelectItem value="funil3">Dark MPX - 3</SelectItem>
-              <SelectItem value="funil4">Dark MPX - 4</SelectItem>
-              <SelectItem value="funil5">Dark MPX - 5</SelectItem>
+              <SelectItem value="funil1">Dark 1 - Iago</SelectItem>
             </SelectContent>
           </Select>
         </div>

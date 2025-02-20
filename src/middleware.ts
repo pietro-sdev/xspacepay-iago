@@ -68,6 +68,6 @@ export const config: MiddlewareConfig = {
      * - _next/image (arquivos de otimização de imagens)
      * - favicon.ico, sitemap.xml, robots.txt (arquivos de metadados)
      */
-    '/((?!api|_next/static|_next/image|public|favicon.ico|sitemap.xml|robots.txt).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.gif|.*\\.css|.*\\.js|.*\\.ico|.*\\.ttf|.*\\.woff|.*\\.woff2|.*\\.mp4|.*\\.mp3).*)',
   ],
 };

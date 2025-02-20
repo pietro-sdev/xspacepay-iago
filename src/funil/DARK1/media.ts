@@ -1,9 +1,8 @@
-// src/funil/media.ts
 import path from "path";
 
 export const MEDIA = {
-  video: path.resolve(__dirname, "../../public/media/DARK1/1.mp4"),
-  image: path.resolve(__dirname, "../../public/media/DARK1/2.png"), // Imagem principal (remarketing PIX)
-  image3: path.resolve(__dirname, "../../public/media/DARK1/3.jpg"), // Imagem para upsell (ex: plano anual)
-  image4: path.resolve(__dirname, "../../public/media/DARK1/4.jpg"), // Imagem para cross-sell (ex: Conteúdo Premium)
+  video1: path.resolve(__dirname, "../../public/media/1.mp4"),
+  REMARKETING: path.resolve(__dirname, "../../public/media/2.jpg"),
+  UPSELL: path.resolve(__dirname, "../../public/media/3.mp4"),
+  CROSSELL: path.resolve(__dirname, "../../public/media/4.mp4"),
 };
